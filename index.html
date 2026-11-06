@@ -232,7 +232,7 @@ ruby rt { font-size: .5em; color: var(--muted); font-weight: 400; }
   const regLabel = (k) => (REG.find((r) => r.key === k) || REG[1]).label;
   const TOPICS = ['おまかせ', '일상·생활', '음식·맛집', '일·직장', '여행', '연애·인간관계', '뉴스·사회', '취미·엔터', '건강·운동', '유행어·신조어'];
   const SPEEDS = [{ l: '느리게', v: 0.7 }, { l: '보통', v: 0.9 }, { l: '빠르게', v: 1.1 }];
-  const DEFAULT_MODEL = 'gemini-2.5-flash';
+  const DEFAULT_MODEL = 'gemini-3.5-flash-lite';
 
   const S = {
     feed: [], hist: [], seq: 0,
@@ -256,7 +256,7 @@ ruby rt { font-size: .5em; color: var(--muted); font-weight: 400; }
   casual = 友達同士のタメ口。
   polite = 職場の同僚や初対面で使う、自然な「です・ます」の会話。
   keigo = 取引先や目上の人に話す極丁寧な敬語（尊敬語・謙譲語、「〜でございます」「〜させていただきます」等）。
-- 各スタイルは1〜3文。最後は必ず、私に聞き返す質問で終える。
+- 各スタイルは1〜2文（短く）。最後は必ず、私に聞き返す質問で終える。
 - 話題はジャンルに沿って、毎回違う具体的で面白いもの（身近な出来事、ニュース、食、仕事、趣味、社会、文化など）を選ぶ。会話が続くときは、私の答えを受けて話題を自然に広げる。
 - 難しい漢字（N2レベル以上、固有名詞、読みにくい語）には、漢字の直後に[ふりがな]を付ける。例: 経済[けいざい]が悪[わる]い、食[た]べる。ふりがなは casual / polite / keigo の本文だけに付け、他の項目には付けない。
 
@@ -266,7 +266,7 @@ ruby rt { font-size: .5em; color: var(--muted); font-weight: 400; }
 【その他の項目】
 - ko: casual の返答の韓国語訳。
 - tip: 聞き取りで引っかかりやすい音の変化や縮約（例: 食べている→食べてる、〜てしまった→〜ちゃった）を、この返答の中から1つ選んで韓国語で短く説明する。なければ空文字。
-- vocab: この返答に出てきた、覚える価値のある口語表現・単語を2〜3個。expr=表記（ふりがな記号なし）、reading=ひらがな、meaning=韓国語の意味、note=ニュアンスや使う場面を韓国語で短く。
+- vocab: この返答に出てきた、覚える価値のある口語表現・単語を2個。expr=表記（ふりがな記号なし）、reading=ひらがな、meaning=韓国語の意味、note=ニュアンスや使う場面を韓国語で短く。
 
 【出力形式】
 {"casual":"","polite":"","keigo":"","ko":"","tip":"","corrections":[{"wrong":"","right":"","why":""}],"vocab":[{"expr":"","reading":"","meaning":"","note":""}]}`;
@@ -395,9 +395,15 @@ ruby rt { font-size: .5em; color: var(--muted); font-weight: 400; }
   async function post(body, signal, model) {
     const url = 'https://generativelanguage.googleapis.com/v1beta/models/' + encodeURIComponent(model || S.model) + ':generateContent';
     let res;
+    let timedOut = false;
+    const tctl = new AbortController();
+    const timer = setTimeout(() => { timedOut = true; tctl.abort(); }, 20000);
+    if (signal) { if (signal.aborted) tctl.abort(); else signal.addEventListener('abort', () => tctl.abort(), { once: true }); }
     try {
-      res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': S.key }, body: JSON.stringify(body), signal });
+      res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': S.key }, body: JSON.stringify(body), signal: tctl.signal });
     } catch (e) {
+      clearTimeout(timer);
+      if (timedOut) throw { code: 'timeout' };
       if (e && e.name === 'AbortError') throw { code: 'cancelled' };
       throw { code: 'network' };
     }
@@ -406,7 +412,12 @@ ruby rt { font-size: .5em; color: var(--muted); font-weight: 400; }
       try { const j = await res.json(); detail = (j.error && j.error.message) || ''; } catch (e) {}
       throw { code: 'http_' + res.status, detail };
     }
-    const j = await res.json();
+    let j;
+    try { j = await res.json(); } catch (e) {
+      clearTimeout(timer);
+      throw timedOut ? { code: 'timeout' } : (signal && signal.aborted ? { code: 'cancelled' } : { code: 'network' });
+    }
+    clearTimeout(timer);
     const parts = (j.candidates && j.candidates[0] && j.candidates[0].content && j.candidates[0].content.parts) || [];
     const text = parts.filter((p) => !p.thought).map((p) => p.text || '').join('');
     if (!text.trim()) throw { code: 'empty' };
@@ -416,12 +427,12 @@ ruby rt { font-size: .5em; color: var(--muted); font-weight: 400; }
     const t = setTimeout(res, ms);
     if (signal) signal.addEventListener('abort', () => { clearTimeout(t); rej({ code: 'cancelled' }); }, { once: true });
   });
-  const transient = (e) => !!e && (e.code === 'network' || e.code === 'http_429' || (typeof e.code === 'string' && e.code.indexOf('http_5') === 0));
+  const transient = (e) => !!e && (e.code === 'network' || e.code === 'timeout' || e.code === 'http_429' || (typeof e.code === 'string' && e.code.indexOf('http_5') === 0));
   async function postRetry(body, signal) {
     const models = [S.model].concat(['gemini-3.5-flash-lite', 'gemini-3.6-flash', 'gemini-3.8-flash'].filter((m) => m !== S.model)).slice(0, 3);
     let lastErr;
     for (let mi = 0; mi < models.length; mi++) {
-      const tries = mi === 0 ? 3 : 1;
+      const tries = mi === 0 ? 2 : 1;
       for (let a = 0; a < tries; a++) {
         try {
           const t = await post(body, signal, models[mi]);
@@ -433,7 +444,7 @@ ruby rt { font-size: .5em; color: var(--muted); font-weight: 400; }
           if (!transient(e)) { if (mi === 0) throw e; break; }
           if (a < tries - 1) {
             setStatus('서버가 바빠서 다시 시도하는 중이에요 (' + (a + 2) + '/' + tries + ')');
-            await wait(1500 * (a + 1), signal);
+            await wait(800, signal);
           } else if (mi < models.length - 1) {
             setStatus('다른 모델로 시도하는 중이에요');
           }
@@ -453,6 +464,7 @@ ruby rt { font-size: .5em; color: var(--muted); font-weight: 400; }
   function errCopy(e) {
     const c = e && e.code;
     if (c === 'network') return '인터넷에 연결되지 않았어요. 연결을 확인해 주세요.';
+    if (c === 'timeout') return '응답이 너무 오래 걸려 멈췄어요. 설정에서 모델을 gemini-3.5-flash-lite로 바꿔 보세요.';
     if (c === 'http_400') return (e.detail && /API key/i.test(e.detail)) ? 'API 키가 올바르지 않아요. 설정에서 다시 확인해 주세요.' : '요청이 거절됐어요. 모델 이름을 확인해 주세요.';
     if (c === 'http_401' || c === 'http_403') return 'API 키를 쓸 수 없어요. 키가 맞는지, 사용이 제한되지 않았는지 확인해 주세요.';
     if (c === 'http_404') return '모델 이름을 찾을 수 없어요. 설정에서 모델 이름을 확인해 주세요.';
