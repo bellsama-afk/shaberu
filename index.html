@@ -653,7 +653,7 @@ ruby rt { font-size: .5em; color: var(--muted); font-weight: 400; }
       h('div', { class: 'n-head' }, h('div', { class: 'n-count' }, h('strong', null, String(all.length)), '개 · 외운 것 ' + (all.length - todo) + '개'),
         h('button', { type: 'button', class: 'cta sm', disabled: !todo, onClick: startReview }, '복습 카드')),
       h('div', null, h('div', { class: 'seg', role: 'group', 'aria-label': '단어장 필터' }, F.map((f) => h('button', { type: 'button', 'aria-pressed': String(S.filter === f[0]), onClick: () => { S.filter = f[0]; renderNotes(); } }, f[1])))),
-      list.length ? list.map(noteCard) : h('div', { class: 'n-empty' }, all.length ? '이 분류에는 아직 없어요.' : '아직 비어 있어요. 대화에서 교정을 받거나 단어 칩을 누르면 여기에 모여요.'),
+      ...(list.length ? list.map(noteCard) : [h('div', { class: 'n-empty' }, all.length ? '이 분류에는 아직 없어요.' : '아직 비어 있어요. 대화에서 교정을 받거나 단어 칩을 누르면 여기에 모여요.')]),
       h('p', { class: 'nnote' }, '단어장은 이 브라우저에만 저장돼요. 사이트 데이터를 지우면 함께 사라져요.'));
     refreshPlaying();
   }
