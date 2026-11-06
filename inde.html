@@ -1,0 +1,706 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>おしゃべり道場 ボイス</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Noto+Sans+KR:wght@400;500;700&family=Shippori+Mincho:wght@700&display=swap">
+<style>
+/* Layout: one-screen chat app with three tabs (talk / notebook / settings). Mic and speaker built in.
+   Ink-and-paper palette, one indigo accent, three register tints, vermilion for corrections and recording. */
+:root {
+  color-scheme: light;
+  --bg: #ECEFF3; --surface: #FFFFFF; --surface2: #E1E6ED; --ink: #161E2E; --muted: #5A6577; --line: #C9D1DC;
+  --accent: #2D4A8C; --on-accent: #FFFFFF; --stamp: #B93A26; --stamp-bg: #F8E6E1; --good: #1F7A57;
+  --r-casual: #17756A; --r-polite: #2D4A8C; --r-keigo: #8A5A10; --on-rc: #FFFFFF;
+  --f-display: 'Shippori Mincho', 'Noto Serif JP', 'Hiragino Mincho ProN', serif;
+  --f-body: 'Noto Sans JP', 'Noto Sans KR', 'Hiragino Sans', 'Apple SD Gothic Neo', 'Malgun Gothic', system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --bg: #0F131A; --surface: #171D27; --surface2: #212A38; --ink: #E8ECF3; --muted: #98A3B6; --line: #2B3547;
+    --accent: #90A9EC; --on-accent: #0C1424; --stamp: #F27C66; --stamp-bg: #3A1F1B; --good: #6FCB9F;
+    --r-casual: #5CC4B5; --r-polite: #90A9EC; --r-keigo: #E0B15A; --on-rc: #0E1420;
+  }
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 15px; line-height: 1.55; -webkit-text-size-adjust: 100%; }
+button, select, textarea, input { font: inherit; color: inherit; }
+button { cursor: pointer; }
+button:disabled { cursor: default; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+p { margin: 0; }
+[hidden] { display: none !important; }
+a { color: var(--accent); }
+
+.app { height: 100%; height: 100dvh; max-width: 720px; margin: 0 auto; display: flex; flex-direction: column;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-top: max(10px, env(safe-area-inset-top, 0px)); padding-bottom: max(10px, env(safe-area-inset-bottom, 0px)); }
+.top { display: flex; align-items: center; justify-content: space-between; gap: 10px 14px; flex-wrap: wrap; padding-bottom: 8px; }
+.top h1 { margin: 0; font-family: var(--f-display); font-weight: 700; font-size: 25px; letter-spacing: .05em; line-height: 1.2; }
+.top .sub { color: var(--muted); font-size: 12px; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; overflow: hidden; background: var(--surface); max-width: 100%; }
+.seg button { border: 0; background: transparent; padding: 6px 12px; font-size: 13px; min-height: 34px; }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); font-weight: 700; }
+.badge { display: inline-block; margin-left: 4px; font-size: 11px; opacity: .8; font-variant-numeric: tabular-nums; }
+.view { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding-bottom: 8px; }
+.tg { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 6px 12px; min-height: 34px; font-size: 13px; }
+.tg[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); border-color: var(--accent); font-weight: 700; }
+.feed { position: relative; flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; display: flex; flex-direction: column; gap: 14px; padding: 4px 0 14px; }
+
+.hello { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 18px 16px; display: flex; flex-direction: column; gap: 12px; }
+.hello h2 { margin: 0; font-family: var(--f-display); font-size: 23px; line-height: 1.3; }
+.hello .small { color: var(--muted); font-size: 13px; }
+.trio { display: flex; flex-wrap: wrap; gap: 8px; }
+.tag-pill { font-size: 13px; font-weight: 700; padding: 4px 12px; border-radius: 999px; color: var(--rc); background: color-mix(in srgb, var(--rc) 12%, var(--surface)); border: 1px solid color-mix(in srgb, var(--rc) 35%, var(--surface)); }
+.casual { --rc: var(--r-casual); } .polite { --rc: var(--r-polite); } .keigo { --rc: var(--r-keigo); }
+.cta { background: var(--accent); color: var(--on-accent); border: 0; border-radius: 10px; padding: 12px 18px; font-weight: 700; min-height: 46px; }
+.cta:disabled { opacity: .45; }
+.cta.sm { min-height: 36px; padding: 6px 14px; font-size: 13px; }
+.ghost { background: transparent; border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; min-height: 34px; font-size: 13px; }
+.ghost.danger { border-color: var(--stamp); color: var(--stamp); }
+
+.ai { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 10px; display: flex; flex-direction: column; gap: 10px; }
+.ai-head { display: flex; justify-content: space-between; gap: 8px; color: var(--muted); font-size: 12px; padding: 0 4px; }
+.reg { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 10px; align-items: start; padding: 10px; border-radius: 10px; background: color-mix(in srgb, var(--rc) 8%, var(--surface)); }
+.reg.mine { box-shadow: inset 0 0 0 1.5px var(--rc); }
+.play { width: 44px; height: 44px; border-radius: 50%; border: 0; background: var(--rc); color: var(--on-rc); display: inline-flex; align-items: center; justify-content: center; flex: none; }
+.play.sm { width: 36px; height: 36px; }
+.ic-p, .ic-s { display: inline-flex; }
+.play .ic-s { display: none; }
+.play.on .ic-s { display: inline-flex; }
+.play.on .ic-p { display: none; }
+.reg-body { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.tagline { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.tag { font-size: 12px; font-weight: 700; letter-spacing: .06em; color: var(--rc); }
+.tag-ko { font-size: 11px; color: var(--muted); }
+.jp { font-size: 17px; line-height: 2; overflow-wrap: anywhere; }
+ruby rt { font-size: .5em; color: var(--muted); font-weight: 400; }
+.veil { display: flex; flex-direction: column; gap: 7px; padding: 6px 0 2px; }
+.veil i { display: block; height: 9px; border-radius: 5px; background: var(--line); }
+.veil i:first-child { width: 94%; } .veil i:nth-child(2) { width: 62%; }
+.veil span { font-size: 12px; color: var(--muted); }
+.acts { display: flex; flex-wrap: wrap; gap: 8px; }
+.ko { color: var(--muted); font-size: 14px; padding: 0 4px; }
+.tip { font-size: 13px; background: var(--surface2); border-radius: 8px; padding: 8px 10px; }
+.tip b { color: var(--accent); }
+.fix { border: 1px solid var(--stamp); background: var(--stamp-bg); border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
+.fix h4 { margin: 0; font-family: var(--f-display); font-size: 15px; color: var(--stamp); }
+.fix .w { text-decoration: line-through; color: var(--muted); }
+.fix .r { font-weight: 700; }
+.fix .why { font-size: 13px; }
+.vocab { display: flex; flex-direction: column; gap: 6px; }
+.vl { font-size: 12px; color: var(--muted); padding: 0 4px; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { display: inline-flex; align-items: baseline; flex-wrap: wrap; gap: 2px 8px; text-align: left; background: var(--surface); border: 1px dashed var(--muted); border-radius: 10px; padding: 7px 11px; min-height: 40px; max-width: 100%; }
+.chip .ce { font-weight: 700; font-size: 15px; } .chip .cr { font-size: 12px; color: var(--muted); } .chip .cm { font-size: 13px; }
+.chip.saved { border-style: solid; border-color: var(--good); background: color-mix(in srgb, var(--good) 10%, var(--surface)); }
+.chip.saved .ce::before { content: "✓ "; color: var(--good); }
+.me { align-self: flex-end; max-width: 88%; background: var(--accent); color: var(--on-accent); border-radius: 14px 14px 4px 14px; padding: 8px 12px; }
+.me .me-reg { display: block; font-size: 11px; opacity: .8; letter-spacing: .05em; }
+.me p { font-size: 16px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.sep { align-self: center; font-size: 12px; color: var(--muted); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 3px 14px; }
+.think { align-self: flex-start; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 10px 12px; font-size: 13px; color: var(--muted); }
+.dots { display: inline-flex; gap: 4px; }
+.dots i { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); animation: pulse 1.2s infinite ease-in-out; }
+.dots i:nth-child(2) { animation-delay: .15s; } .dots i:nth-child(3) { animation-delay: .3s; }
+@keyframes pulse { 0%, 80%, 100% { opacity: .25; } 40% { opacity: 1; } }
+.err { align-self: flex-start; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; border: 1px solid var(--stamp); background: var(--stamp-bg); border-radius: 12px; padding: 10px 12px; font-size: 14px; }
+
+.composer { border-top: 1px solid var(--line); padding-top: 10px; display: flex; flex-direction: column; gap: 8px; }
+.regpick { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.rp-label { font-size: 12px; color: var(--muted); }
+.inputrow { display: flex; gap: 8px; align-items: stretch; }
+.inputrow textarea { flex: 1; min-width: 0; resize: none; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; font-size: 16px; line-height: 1.5; min-height: 56px; }
+.mic { flex: none; width: 56px; border: 0; border-radius: 10px; background: var(--surface2); color: var(--ink); display: inline-flex; align-items: center; justify-content: center; }
+.mic.rec { background: var(--stamp); color: #fff; animation: recpulse 1.1s infinite ease-in-out; }
+@keyframes recpulse { 0%, 100% { opacity: 1; } 50% { opacity: .6; } }
+.mic:disabled { opacity: .45; }
+.send { flex: none; background: var(--accent); color: var(--on-accent); border: 0; border-radius: 10px; padding: 0 14px; font-weight: 700; min-width: 60px; }
+.send:disabled { opacity: .45; }
+.subrow { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.sel { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+.sel select { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; min-height: 34px; font-size: 13px; color: var(--ink); max-width: 46vw; }
+.status { font-size: 12px; color: var(--stamp); min-height: 1em; }
+
+.notes, .settings { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; padding: 4px 0 14px; }
+.n-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.n-count { font-size: 14px; color: var(--muted); }
+.n-count strong { font-size: 22px; color: var(--ink); font-family: var(--f-display); margin-right: 2px; font-variant-numeric: tabular-nums; }
+.n-empty { background: var(--surface); border: 1px dashed var(--line); border-radius: 12px; padding: 18px 16px; color: var(--muted); font-size: 14px; }
+.n-card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+.n-card.mastered { opacity: .6; }
+.n-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12px; }
+.kind { font-weight: 700; padding: 2px 9px; border-radius: 999px; }
+.kind.mistake { color: var(--stamp); background: var(--stamp-bg); }
+.kind.word { color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, var(--surface)); }
+.hits { color: var(--stamp); } .done { color: var(--good); font-weight: 700; }
+.n-main { display: flex; align-items: flex-start; gap: 10px; }
+.n-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.wrong { text-decoration: line-through; color: var(--muted); overflow-wrap: anywhere; }
+.right { font-size: 18px; font-weight: 700; overflow-wrap: anywhere; }
+.right .rd { font-size: 13px; font-weight: 400; color: var(--muted); }
+.mean { font-size: 14px; } .nnote { font-size: 13px; color: var(--muted); }
+.n-acts { display: flex; gap: 8px; flex-wrap: wrap; }
+.review { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+.rv-prog { font-size: 12px; color: var(--muted); } .rv-q { font-size: 13px; color: var(--muted); }
+.rv-main { font-size: 20px; font-weight: 700; overflow-wrap: anywhere; } .rv-main.mean { font-family: var(--f-display); }
+
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+.card h3 { margin: 0; font-family: var(--f-display); font-size: 17px; }
+.field { display: flex; flex-direction: column; gap: 4px; }
+.field label { font-size: 12px; color: var(--muted); }
+.field input { background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; font-size: 16px; min-height: 44px; width: 100%; }
+.row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.small { font-size: 13px; color: var(--muted); }
+.ok { color: var(--good); font-size: 13px; }
+#toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(16px + env(safe-area-inset-bottom, 0px)); max-width: min(92vw, 420px); background: var(--ink); color: var(--bg); padding: 10px 14px; border-radius: 10px; font-size: 13px; z-index: 20; }
+@media (prefers-reduced-motion: reduce) { .dots i, .mic.rec { animation: none; } }
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <div>
+      <h1>おしゃべり道場</h1>
+      <div class="sub">말하고, 듣고, 고쳐 가는 일본어 회화</div>
+    </div>
+    <div class="seg" role="group" aria-label="화면 전환">
+      <button type="button" id="tab-chat" aria-pressed="true">대화</button>
+      <button type="button" id="tab-notes" aria-pressed="false">단어장<span class="badge" id="badge"></span></button>
+      <button type="button" id="tab-set" aria-pressed="false">설정</button>
+    </div>
+  </header>
+
+  <section id="view-chat" class="view">
+    <div id="bar" class="bar"></div>
+    <div id="feed" class="feed"></div>
+    <form id="composer" class="composer" autocomplete="off">
+      <div class="regpick">
+        <span class="rp-label">내가 연습할 말투</span>
+        <div id="regpick" class="seg" role="group" aria-label="내가 연습할 말투"></div>
+      </div>
+      <div class="inputrow">
+        <button type="button" id="mic" class="mic" aria-label="음성 입력"></button>
+        <textarea id="msg" rows="2" lang="ja" placeholder="마이크를 누르고 일본어로 말하거나, 직접 입력하세요" aria-label="내 답장"></textarea>
+        <button type="submit" id="send" class="send">보내기</button>
+      </div>
+      <div class="subrow">
+        <label class="sel"><span>주제</span><select id="topicSel"></select></label>
+        <button type="button" id="newTopic" class="ghost">새 주제 받기</button>
+      </div>
+      <p id="status" class="status" role="status"></p>
+    </form>
+  </section>
+
+  <section id="view-notes" class="view" hidden><div id="notes" class="notes"></div></section>
+  <section id="view-set" class="view" hidden><div id="settings" class="settings"></div></section>
+</div>
+<div id="toast" role="status" hidden></div>
+
+<script>
+(function () {
+  'use strict';
+  const $ = (s, el) => (el || document).querySelector(s);
+  function h(tag, props, ...kids) {
+    const el = document.createElement(tag);
+    if (props) for (const [k, v] of Object.entries(props)) {
+      if (v == null || v === false) continue;
+      if (k === 'class') el.className = v;
+      else if (k.startsWith('on')) el.addEventListener(k.slice(2).toLowerCase(), v);
+      else el.setAttribute(k, v === true ? '' : v);
+    }
+    for (const kid of kids.flat()) {
+      if (kid == null || kid === false) continue;
+      el.append(kid.nodeType ? kid : document.createTextNode(String(kid)));
+    }
+    return el;
+  }
+  function lsGet(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } }
+  function lsSet(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch (e) { return false; } }
+  function lsDel(k) { try { localStorage.removeItem(k); } catch (e) {} }
+  function hid(s) { let x = 5381; for (const c of String(s)) x = ((x << 5) + x + c.codePointAt(0)) >>> 0; return x.toString(36); }
+
+  const REG = [
+    { key: 'casual', label: 'カジュアル', ko: '친구끼리 반말' },
+    { key: 'polite', label: '丁寧', ko: 'です・ます' },
+    { key: 'keigo', label: '極丁寧', ko: '경어 · 비즈니스' }
+  ];
+  const regLabel = (k) => (REG.find((r) => r.key === k) || REG[1]).label;
+  const TOPICS = ['おまかせ', '일상·생활', '음식·맛집', '일·직장', '여행', '연애·인간관계', '뉴스·사회', '취미·엔터', '건강·운동', '유행어·신조어'];
+  const SPEEDS = [{ l: '느리게', v: 0.7 }, { l: '보통', v: 0.9 }, { l: '빠르게', v: 1.1 }];
+  const DEFAULT_MODEL = 'gemini-2.5-flash';
+
+  const S = {
+    feed: [], hist: [], seq: 0,
+    listen: lsGet('ojd-listen', true), furi: lsGet('ojd-furi', true), speed: lsGet('ojd-speed', 0.9),
+    topic: lsGet('ojd-topic', 'おまかせ'), target: lsGet('ojd-target', 'polite'),
+    auto: lsGet('ojd-auto', true), autosend: lsGet('ojd-autosend', false),
+    key: lsGet('ojd-key', ''), model: lsGet('ojd-model', DEFAULT_MODEL),
+    busy: false, ctl: null, err: null, last: null, tab: 'chat', filter: 'all', review: null, playing: null, confirmDel: null, rec: null
+  };
+  if (!TOPICS.includes(S.topic)) S.topic = 'おまかせ';
+  if (!REG.some((r) => r.key === S.target)) S.target = 'polite';
+  if (!SPEEDS.some((s) => s.v === S.speed)) S.speed = 0.9;
+  if (typeof S.key !== 'string') S.key = '';
+  if (typeof S.model !== 'string' || !S.model) S.model = DEFAULT_MODEL;
+
+  const RULES = `あなたは日本人の友達として、韓国人の日本語学習者（JLPT N1〜N2、特に聞き取りが苦手）と会話練習をします。返答は必ずJSONだけで返してください（説明文もコードフェンスも付けない）。
+
+【話し方】
+- 教科書の文章ではなく、日本人が実際に使う自然な話し言葉にする。縮約形・フィラー・口語表現を積極的に使う（〜ちゃった、〜てる、〜じゃん、〜んだよね、っていうか、なんか、めっちゃ、えーと 等）。
+- 同じ内容を3つの丁寧さで言い分ける。内容と意味は同じで、言い方だけ変える。
+  casual = 友達同士のタメ口。
+  polite = 職場の同僚や初対面で使う、自然な「です・ます」の会話。
+  keigo = 取引先や目上の人に話す極丁寧な敬語（尊敬語・謙譲語、「〜でございます」「〜させていただきます」等）。
+- 各スタイルは1〜3文。最後は必ず、私に聞き返す質問で終える。
+- 話題はジャンルに沿って、毎回違う具体的で面白いもの（身近な出来事、ニュース、食、仕事、趣味、社会、文化など）を選ぶ。会話が続くときは、私の答えを受けて話題を自然に広げる。
+- 難しい漢字（N2レベル以上、固有名詞、読みにくい語）には、漢字の直後に[ふりがな]を付ける。例: 経済[けいざい]が悪[わる]い、食[た]べる。ふりがなは casual / polite / keigo の本文だけに付け、他の項目には付けない。
+
+【私の文の確認】
+私のメッセージの先頭に[私が目標にしている丁寧さ: …]が付くことがある。私の文は音声認識で入力された場合があり、句読点や漢字の変換ミスは誤りとして扱わない。文法・語彙・不自然な言い回し・目標の丁寧さに合わない表現があれば、会話は止めずに返答を続けたうえで corrections に入れる（最大2件。本当に直したほうがいいものだけ。誤りがなければ空配列）。wrong=私が書いた表現、right=自然な表現（ふりがな不要）、why=韓国語の短い説明。
+
+【その他の項目】
+- ko: casual の返答の韓国語訳。
+- tip: 聞き取りで引っかかりやすい音の変化や縮約（例: 食べている→食べてる、〜てしまった→〜ちゃった）を、この返答の中から1つ選んで韓国語で短く説明する。なければ空文字。
+- vocab: この返答に出てきた、覚える価値のある口語表現・単語を2〜3個。expr=表記（ふりがな記号なし）、reading=ひらがな、meaning=韓国語の意味、note=ニュアンスや使う場面を韓国語で短く。
+
+【出力形式】
+{"casual":"","polite":"","keigo":"","ko":"","tip":"","corrections":[{"wrong":"","right":"","why":""}],"vocab":[{"expr":"","reading":"","meaning":"","note":""}]}`;
+
+  /* furigana */
+  const RUBY_RE = /([一-鿿々〆ヶ]+)\[([^\]]+)\]/g;
+  const plain = (s) => String(s || '').replace(/\[[^\]]*\]/g, '');
+  function jp(s, furi) {
+    const frag = document.createDocumentFragment();
+    const str = String(s || '');
+    let last = 0, m;
+    RUBY_RE.lastIndex = 0;
+    while ((m = RUBY_RE.exec(str))) {
+      if (m.index > last) frag.append(str.slice(last, m.index));
+      if (furi) {
+        const r = document.createElement('ruby'); r.append(m[1]);
+        const rt = document.createElement('rt'); rt.textContent = m[2]; r.append(rt); frag.append(r);
+      } else frag.append(m[1]);
+      last = m.index + m[0].length;
+    }
+    if (last < str.length) frag.append(str.slice(last));
+    return frag;
+  }
+
+  const ICONS = {
+    play: '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M8 5.5v13l11-6.5z" fill="currentColor"/></svg>',
+    stop: '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><rect x="6.5" y="6.5" width="11" height="11" rx="1.5" fill="currentColor"/></svg>',
+    mic: '<svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3" fill="currentColor"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>'
+  };
+  function icon(cls, name) { const s = document.createElement('span'); s.className = cls; s.innerHTML = ICONS[name]; return s; }
+  let toastT;
+  function toast(msg) {
+    const t = $('#toast'); t.textContent = msg; t.hidden = false;
+    clearTimeout(toastT); toastT = setTimeout(() => { t.hidden = true; }, 4500);
+  }
+  function setStatus(msg) { $('#status').textContent = msg || ''; }
+
+  /* speech output */
+  const TTS = { ok: 'speechSynthesis' in window, voice: null };
+  function pickVoice() {
+    if (!TTS.ok) return;
+    const vs = speechSynthesis.getVoices().filter((v) => /^ja/i.test(v.lang.replace('_', '-')));
+    TTS.voice = vs.find((v) => /Google|Kyoko|Nanami|Haruka|Premium|Enhanced/i.test(v.name)) || vs[0] || null;
+  }
+  if (TTS.ok) { pickVoice(); try { speechSynthesis.addEventListener('voiceschanged', pickVoice); } catch (e) {} }
+  function refreshPlaying() {
+    document.querySelectorAll('[data-play]').forEach((b) => b.classList.toggle('on', b.getAttribute('data-play') === S.playing));
+  }
+  function speak(text, key) {
+    if (!TTS.ok) { toast('이 브라우저는 음성 재생을 지원하지 않아요. 크롬으로 열어 주세요.'); return; }
+    if (S.playing === key) { speechSynthesis.cancel(); S.playing = null; refreshPlaying(); return; }
+    if (S.rec) { try { S.rec.abort(); } catch (e) {} }
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(plain(text));
+    u.lang = 'ja-JP'; if (TTS.voice) u.voice = TTS.voice; u.rate = S.speed;
+    let started = false;
+    u.onstart = () => { started = true; };
+    u.onend = u.onerror = () => { if (S.playing === key) { S.playing = null; refreshPlaying(); } };
+    S.playing = key; refreshPlaying();
+    speechSynthesis.speak(u);
+    setTimeout(() => {
+      if (!started && S.playing === key) {
+        S.playing = null; refreshPlaying();
+        toast('소리가 나지 않아요. 기기 설정에서 일본어 음성(Google 음성 서비스)이 설치되어 있는지 확인해 주세요.');
+      }
+    }, 3000);
+  }
+
+  /* speech input */
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  function updateMic() {
+    const b = $('#mic'); b.replaceChildren(icon('', 'mic'));
+    b.classList.toggle('rec', !!S.rec);
+    b.setAttribute('aria-label', S.rec ? '음성 입력 끝내기' : '음성 입력 시작');
+    b.disabled = S.busy;
+  }
+  function toggleMic() {
+    if (!SR) { toast('이 브라우저는 음성 입력을 지원하지 않아요. 안드로이드 크롬으로 열어 주세요.'); return; }
+    if (S.rec) { S.rec.stop(); return; }
+    if (TTS.ok) { speechSynthesis.cancel(); S.playing = null; refreshPlaying(); }
+    const msg = $('#msg'); const base = msg.value ? msg.value.replace(/\s+$/, '') + ' ' : '';
+    const r = new SR();
+    r.lang = 'ja-JP'; r.interimResults = true; r.continuous = false; r.maxAlternatives = 1;
+    r.onresult = (e) => { let t = ''; for (let i = 0; i < e.results.length; i++) t += e.results[i][0].transcript; msg.value = base + t; };
+    r.onerror = (e) => {
+      const c = e.error;
+      if (c === 'not-allowed' || c === 'service-not-allowed') setStatus('마이크 권한이 필요해요. 주소창 왼쪽 자물쇠 아이콘에서 마이크를 허용해 주세요.');
+      else if (c === 'no-speech') setStatus('목소리가 들리지 않았어요. 다시 눌러서 말해 주세요.');
+      else if (c === 'network') setStatus('음성 인식 서버에 연결하지 못했어요. 인터넷 연결을 확인해 주세요.');
+      else if (c !== 'aborted') setStatus('음성 입력 오류: ' + c);
+    };
+    r.onend = () => {
+      S.rec = null; updateMic();
+      if (S.autosend && msg.value.trim()) send();
+    };
+    try { setStatus(''); r.start(); S.rec = r; updateMic(); setStatus('듣고 있어요. 일본어로 말해 보세요.'); } catch (e) { S.rec = null; updateMic(); }
+  }
+
+  /* notebook (this device only) */
+  const Store = {
+    items: new Map(),
+    load() { const arr = lsGet('ojd-notes-v1', []); this.items = new Map((Array.isArray(arr) ? arr : []).filter((x) => x && x.id).map((x) => [x.id, x])); },
+    save() { if (!lsSet('ojd-notes-v1', [...this.items.values()])) toast('저장하지 못했어요. 브라우저 저장 공간을 확인해 주세요.'); },
+    put(item) { this.items.set(item.id, item); this.save(); onStore(); },
+    patch(id, p) { const c = this.items.get(id); if (c) this.put(Object.assign({}, c, p)); },
+    remove(id) { this.items.delete(id); this.save(); onStore(); }
+  };
+  function onStore() { renderNotes(); markSaved(); }
+  function saveMistakes(list) {
+    for (const c of list) {
+      const id = 'n_m_' + hid(c.right); const old = Store.items.get(id);
+      Store.put({ id, kind: 'mistake', expr: c.right, reading: '', wrong: c.wrong, meaning: '', note: c.why, createdAt: old ? old.createdAt : Date.now(), hits: (old && old.hits ? old.hits : 0) + 1, mastered: false });
+    }
+  }
+  function saveWord(v) {
+    const id = 'n_w_' + hid(v.expr);
+    if (Store.items.has(id)) { toast('이미 단어장에 있어요.'); return; }
+    Store.put({ id, kind: 'word', expr: v.expr, reading: v.reading, wrong: '', meaning: v.meaning, note: v.note, createdAt: Date.now(), hits: 1, mastered: false });
+    toast('단어장에 저장했어요.');
+  }
+  function markSaved() {
+    document.querySelectorAll('[data-vid]').forEach((b) => b.classList.toggle('saved', Store.items.has(b.getAttribute('data-vid'))));
+  }
+
+  /* Gemini */
+  async function post(body, signal, model) {
+    const url = 'https://generativelanguage.googleapis.com/v1beta/models/' + encodeURIComponent(model || S.model) + ':generateContent';
+    let res;
+    try {
+      res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': S.key }, body: JSON.stringify(body), signal });
+    } catch (e) {
+      if (e && e.name === 'AbortError') throw { code: 'cancelled' };
+      throw { code: 'network' };
+    }
+    if (!res.ok) {
+      let detail = '';
+      try { const j = await res.json(); detail = (j.error && j.error.message) || ''; } catch (e) {}
+      throw { code: 'http_' + res.status, detail };
+    }
+    const j = await res.json();
+    const parts = (j.candidates && j.candidates[0] && j.candidates[0].content && j.candidates[0].content.parts) || [];
+    const text = parts.filter((p) => !p.thought).map((p) => p.text || '').join('');
+    if (!text.trim()) throw { code: 'empty' };
+    return text;
+  }
+  const wait = (ms, signal) => new Promise((res, rej) => {
+    const t = setTimeout(res, ms);
+    if (signal) signal.addEventListener('abort', () => { clearTimeout(t); rej({ code: 'cancelled' }); }, { once: true });
+  });
+  const transient = (e) => !!e && (e.code === 'network' || e.code === 'http_429' || (typeof e.code === 'string' && e.code.indexOf('http_5') === 0));
+  async function postRetry(body, signal) {
+    const models = [S.model].concat(['gemini-3.5-flash-lite', 'gemini-3.6-flash', 'gemini-3.8-flash'].filter((m) => m !== S.model)).slice(0, 3);
+    let lastErr;
+    for (let mi = 0; mi < models.length; mi++) {
+      const tries = mi === 0 ? 3 : 1;
+      for (let a = 0; a < tries; a++) {
+        try {
+          const t = await post(body, signal, models[mi]);
+          setStatus('');
+          if (mi > 0) toast('지금 모델이 바빠서 ' + models[mi] + ' 모델로 답했어요.');
+          return t;
+        } catch (e) {
+          lastErr = e;
+          if (!transient(e)) { if (mi === 0) throw e; break; }
+          if (a < tries - 1) {
+            setStatus('서버가 바빠서 다시 시도하는 중이에요 (' + (a + 2) + '/' + tries + ')');
+            await wait(1500 * (a + 1), signal);
+          } else if (mi < models.length - 1) {
+            setStatus('다른 모델로 시도하는 중이에요');
+          }
+        }
+      }
+    }
+    setStatus('');
+    throw lastErr;
+  }
+  function parseJSON(text) {
+    let t = text.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
+    try { return JSON.parse(t); } catch (e) {}
+    const a = t.indexOf('{'), b = t.lastIndexOf('}');
+    if (a >= 0 && b > a) { try { return JSON.parse(t.slice(a, b + 1)); } catch (e) {} }
+    throw { code: 'invalid_json' };
+  }
+  function errCopy(e) {
+    const c = e && e.code;
+    if (c === 'network') return '인터넷에 연결되지 않았어요. 연결을 확인해 주세요.';
+    if (c === 'http_400') return (e.detail && /API key/i.test(e.detail)) ? 'API 키가 올바르지 않아요. 설정에서 다시 확인해 주세요.' : '요청이 거절됐어요. 모델 이름을 확인해 주세요.';
+    if (c === 'http_401' || c === 'http_403') return 'API 키를 쓸 수 없어요. 키가 맞는지, 사용이 제한되지 않았는지 확인해 주세요.';
+    if (c === 'http_404') return '모델 이름을 찾을 수 없어요. 설정에서 모델 이름을 확인해 주세요.';
+    if (c === 'http_429') return '사용 한도에 닿았어요. 잠시 뒤에 다시 시도해 주세요.';
+    if (c && c.startsWith('http_5')) return 'Google 서버가 바쁜 것 같아요. 자동으로 다시 시도했지만 안 됐어요. 잠시 뒤에 다시 시도해 주세요. (오류 ' + c.slice(5) + ')';
+    if (c === 'invalid_json' || c === 'empty') return '응답을 읽지 못했어요. 한 번 더 시도해 주세요.';
+    return '문제가 생겼어요. 다시 시도해 주세요.';
+  }
+  function normalize(d) {
+    if (!d || typeof d !== 'object' || Array.isArray(d)) throw { code: 'invalid_json' };
+    const s = (v) => (typeof v === 'string' ? v.trim() : '');
+    const m = {
+      kind: 'ai', id: 'm' + (++S.seq),
+      casual: s(d.casual), polite: s(d.polite), keigo: s(d.keigo), ko: s(d.ko), tip: s(d.tip), revealed: false, showKo: false,
+      corrections: (Array.isArray(d.corrections) ? d.corrections : []).filter((c) => c && s(c.right)).slice(0, 2).map((c) => ({ wrong: s(c.wrong), right: s(c.right), why: s(c.why) })),
+      vocab: (Array.isArray(d.vocab) ? d.vocab : []).filter((v) => v && s(v.expr)).slice(0, 4).map((v) => ({ expr: s(v.expr), reading: s(v.reading), meaning: s(v.meaning), note: s(v.note) }))
+    };
+    if (!m.casual || !m.polite || !m.keigo) throw { code: 'invalid_json' };
+    return m;
+  }
+  async function run(content) {
+    if (S.busy) return;
+    S.last = content; S.err = null;
+    if (!S.key) { S.err = { msg: '먼저 설정에서 Gemini API 키를 입력해 주세요.', go: true }; renderFeed({ scroll: 'bottom' }); return; }
+    S.busy = true; S.ctl = new AbortController();
+    renderFeed({ scroll: 'bottom' }); setComposerState();
+    try {
+      let past = S.hist.slice(-14);
+      while (past.length && past[0].role !== 'user') past.shift();
+      const contents = past.concat([{ role: 'user', parts: [{ text: content }] }]);
+      const text = await postRetry({ systemInstruction: { parts: [{ text: RULES }] }, contents, generationConfig: { responseMimeType: 'application/json', temperature: 0.9 } }, S.ctl.signal);
+      const m = normalize(parseJSON(text));
+      S.hist.push({ role: 'user', parts: [{ text: content }] }, { role: 'model', parts: [{ text: JSON.stringify({ casual: m.casual, polite: m.polite, keigo: m.keigo }) }] });
+      S.feed.push(m); saveMistakes(m.corrections);
+      S.busy = false; S.ctl = null;
+      renderFeed({ scroll: 'ai' });
+      if (S.auto) speak(m[S.target], m.id + ':' + S.target);
+    } catch (e) {
+      S.err = e && e.code === 'cancelled' ? { msg: '중지했어요.', retry: true } : { msg: errCopy(e), retry: true, go: e && (e.code === 'http_400' || e.code === 'http_401' || e.code === 'http_403' || e.code === 'http_404') };
+      S.busy = false; S.ctl = null;
+      renderFeed({ scroll: 'bottom' });
+    }
+    setComposerState();
+  }
+  function send() {
+    const msg = $('#msg'); const text = msg.value.trim();
+    if (!text || S.busy) return;
+    msg.value = ''; setStatus('');
+    S.feed.push({ kind: 'me', text, reg: S.target });
+    run('[私が目標にしている丁寧さ: ' + regLabel(S.target) + ']\n' + text);
+  }
+  function newTopic() {
+    if (S.busy) return;
+    if (S.feed.length) S.feed.push({ kind: 'sep', text: '새 주제 · ' + S.topic });
+    const g = S.topic === 'おまかせ' ? 'おまかせ（自由）' : S.topic;
+    run('[話題リクエスト] ジャンル: ' + g + '。新しい話題を出して。聞き取りの練習になるように2〜3文で話しかけて、最後に質問して。これまでに出した話題とは違うものにして。');
+  }
+
+  /* chat rendering */
+  function tg(label, on, fn, title) { return h('button', { type: 'button', class: 'tg', 'aria-pressed': String(on), title, onClick: fn }, label); }
+  function renderBar() {
+    const speed = h('div', { class: 'seg', role: 'group', 'aria-label': '재생 속도' },
+      SPEEDS.map((s) => h('button', { type: 'button', 'aria-pressed': String(S.speed === s.v), onClick: () => { S.speed = s.v; lsSet('ojd-speed', s.v); renderBar(); } }, s.l)));
+    $('#bar').replaceChildren(
+      tg('듣기 모드', S.listen, () => { S.listen = !S.listen; lsSet('ojd-listen', S.listen); renderBar(); renderFeed(); }, '켜면 스크립트를 숨기고 소리부터 들어요'),
+      tg('ふりがな', S.furi, () => { S.furi = !S.furi; lsSet('ojd-furi', S.furi); renderBar(); renderFeed(); }),
+      tg('자동 재생', S.auto, () => { S.auto = !S.auto; lsSet('ojd-auto', S.auto); renderBar(); }, '답이 오면 내가 고른 말투로 바로 읽어 줘요'),
+      tg('말하면 바로 전송', S.autosend, () => { S.autosend = !S.autosend; lsSet('ojd-autosend', S.autosend); renderBar(); }, '음성 입력이 끝나면 자동으로 보내요'),
+      speed);
+  }
+  function hello() {
+    return h('div', { class: 'hello' },
+      h('h2', null, '今日の話題、聞いてみよう'),
+      h('p', null, '주제를 받으면 친구가 짧게 말을 건네요. 같은 내용을 세 가지 말투로 들려줘요.'),
+      h('div', { class: 'trio' }, REG.map((r) => h('span', { class: 'tag-pill ' + r.key }, r.label))),
+      h('p', { class: 'small' }, '마이크 버튼으로 일본어로 답하고, 소리부터 듣고 이해해 보세요. 틀린 표현은 단어장에 자동으로 모여요.'),
+      S.key ? null : h('p', { class: 'small' }, '시작하기 전에 설정 탭에서 Gemini API 키를 입력해 주세요.'),
+      h('div', { class: 'row' },
+        h('button', { type: 'button', class: 'cta', disabled: S.busy, onClick: () => (S.key ? newTopic() : setTab('set')) }, S.key ? '話題をもらう（주제 받기）' : '설정으로 가기')));
+  }
+  function meBubble(m) { return h('div', { class: 'me' }, h('span', { class: 'me-reg' }, regLabel(m.reg)), h('p', { lang: 'ja' }, m.text)); }
+  function aiCard(m) {
+    const shown = !S.listen || m.revealed;
+    const rows = REG.map((r) => {
+      const key = m.id + ':' + r.key;
+      return h('div', { class: 'reg ' + r.key + (S.target === r.key ? ' mine' : '') },
+        h('button', { type: 'button', class: 'play', 'data-play': key, 'aria-label': r.label + ' 재생', onClick: () => speak(m[r.key], key) }, icon('ic-p', 'play'), icon('ic-s', 'stop')),
+        h('div', { class: 'reg-body' },
+          h('div', { class: 'tagline' }, h('span', { class: 'tag' }, r.label), h('span', { class: 'tag-ko' }, r.ko)),
+          shown ? h('p', { class: 'jp', lang: 'ja' }, jp(m[r.key], S.furi)) : h('div', { class: 'veil' }, h('i'), h('i'), h('span', null, '먼저 듣고 이해해 보세요'))));
+    });
+    const acts = h('div', { class: 'acts' },
+      S.listen ? h('button', { type: 'button', class: 'ghost', onClick: () => { m.revealed = !m.revealed; renderFeed(); } }, m.revealed ? '스크립트 숨기기' : '스크립트 보기') : null,
+      m.ko ? h('button', { type: 'button', class: 'ghost', onClick: () => { m.showKo = !m.showKo; renderFeed(); } }, m.showKo ? '번역 닫기' : '한국어 번역') : null);
+    const fix = m.corrections.length ? h('div', { class: 'fix' }, h('h4', null, '（교정）'),
+      m.corrections.map((c) => h('div', null,
+        h('p', { lang: 'ja' }, c.wrong ? h('span', { class: 'w' }, c.wrong) : null, c.wrong ? ' → ' : null, h('span', { class: 'r' }, c.right)),
+        c.why ? h('p', { class: 'why' }, c.why) : null))) : null;
+    const vocab = shown && m.vocab.length ? h('div', { class: 'vocab' }, h('p', { class: 'vl' }, '탭해서 단어장에 저장'),
+      h('div', { class: 'chips' }, m.vocab.map((v) => h('button', { type: 'button', class: 'chip', 'data-vid': 'n_w_' + hid(v.expr), onClick: () => saveWord(v) },
+        h('span', { class: 'ce', lang: 'ja' }, v.expr), v.reading && v.reading !== v.expr ? h('span', { class: 'cr' }, v.reading) : null, h('span', { class: 'cm' }, v.meaning))))) : null;
+    return h('article', { class: 'ai' },
+      h('div', { class: 'ai-head' }, h('span', null, '友達'), h('span', null, '테두리 = 내가 연습할 말투')),
+      rows, acts,
+      m.showKo && m.ko ? h('p', { class: 'ko' }, m.ko) : null,
+      shown && m.tip ? h('p', { class: 'tip' }, h('b', null, '듣기 포인트 '), m.tip) : null,
+      fix, vocab);
+  }
+  function thinking() {
+    return h('div', { class: 'think' }, h('span', { class: 'dots' }, h('i'), h('i'), h('i')), h('span', null, '생각 중이에요'),
+      h('button', { type: 'button', class: 'ghost', onClick: () => { if (S.ctl) S.ctl.abort(); } }, '중지'));
+  }
+  function errCard() {
+    return h('div', { class: 'err', role: 'alert' }, h('span', null, S.err.msg),
+      S.err.go ? h('button', { type: 'button', class: 'ghost', onClick: () => setTab('set') }, '설정 열기') : null,
+      S.err.retry && S.last && S.key ? h('button', { type: 'button', class: 'ghost', onClick: () => run(S.last) }, '다시 시도') : null);
+  }
+  function renderFeed(o) {
+    const f = $('#feed'); const top = f.scrollTop; const kids = [];
+    if (!S.feed.length && !S.busy && !S.err) kids.push(hello());
+    S.feed.forEach((m) => kids.push(m.kind === 'me' ? meBubble(m) : m.kind === 'sep' ? h('div', { class: 'sep' }, m.text) : aiCard(m)));
+    if (S.busy) kids.push(thinking());
+    if (S.err) kids.push(errCard());
+    f.replaceChildren(...kids);
+    if (o && o.scroll === 'bottom') f.scrollTop = f.scrollHeight;
+    else if (o && o.scroll === 'ai') { const c = f.querySelectorAll('.ai'); const l = c[c.length - 1]; f.scrollTop = l ? Math.max(0, l.offsetTop - 4) : f.scrollHeight; }
+    else f.scrollTop = top;
+    refreshPlaying(); markSaved();
+  }
+  function setComposerState() {
+    $('#msg').disabled = S.busy; $('#send').disabled = S.busy; $('#newTopic').disabled = S.busy; updateMic();
+  }
+  function buildComposer() {
+    $('#regpick').replaceChildren(...REG.map((r) => h('button', { type: 'button', 'aria-pressed': String(S.target === r.key), onClick: () => { S.target = r.key; lsSet('ojd-target', r.key); buildComposer(); renderFeed(); } }, r.label)));
+    $('#topicSel').replaceChildren(...TOPICS.map((t) => h('option', { value: t, selected: t === S.topic }, t)));
+  }
+
+  /* notebook rendering */
+  function startReview() {
+    const q = [...Store.items.values()].filter((x) => !x.mastered).map((x) => x.id);
+    for (let i = q.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); const t = q[i]; q[i] = q[j]; q[j] = t; }
+    S.review = { q, i: 0, shown: false, got: 0 }; renderNotes();
+  }
+  function reviewView() {
+    const R = S.review;
+    while (R.i < R.q.length && !Store.items.has(R.q[R.i])) R.i++;
+    const close = h('button', { type: 'button', class: 'ghost', onClick: () => { S.review = null; renderNotes(); } }, '복습 그만하기');
+    if (R.i >= R.q.length) return h('div', { class: 'review' }, h('div', { class: 'rv-main mean' }, '복습 끝'), h('p', null, R.got + '개를 외웠어요.'), h('div', null, h('button', { type: 'button', class: 'cta', onClick: () => { S.review = null; renderNotes(); } }, '단어장으로')));
+    const x = Store.items.get(R.q[R.i]);
+    const next = (got) => { if (got) { R.got++; Store.patch(x.id, { mastered: true }); } R.i++; R.shown = false; renderNotes(); };
+    const front = x.kind === 'mistake'
+      ? [h('p', { class: 'rv-q' }, '이 표현을 자연스러운 일본어로 고쳐 보세요'), h('p', { class: 'rv-main', lang: 'ja' }, x.wrong || x.note)]
+      : [h('p', { class: 'rv-q' }, '일본어로 뭐라고 할까요?'), h('p', { class: 'rv-main mean' }, x.meaning || x.note)];
+    const back = R.shown ? [
+      h('div', { class: 'n-main' },
+        h('button', { type: 'button', class: 'play sm polite', 'data-play': 'rv:' + x.id, 'aria-label': '재생', onClick: () => speak(x.expr, 'rv:' + x.id) }, icon('ic-p', 'play'), icon('ic-s', 'stop')),
+        h('div', { class: 'n-text' }, h('p', { class: 'right', lang: 'ja' }, x.expr, x.reading ? h('span', { class: 'rd' }, ' (' + x.reading + ')') : null), x.note ? h('p', { class: 'nnote' }, x.note) : null)),
+      h('div', { class: 'n-acts' }, h('button', { type: 'button', class: 'ghost', onClick: () => next(false) }, '아직이에요'), h('button', { type: 'button', class: 'cta sm', onClick: () => next(true) }, '외웠어요'))
+    ] : [h('div', null, h('button', { type: 'button', class: 'cta', onClick: () => { R.shown = true; renderNotes(); } }, '정답 보기'))];
+    return h('div', { class: 'review' }, h('p', { class: 'rv-prog' }, (R.i + 1) + ' / ' + R.q.length), front, back, close);
+  }
+  function noteCard(x) {
+    const key = 'nt:' + x.id;
+    const main = x.kind === 'mistake'
+      ? [x.wrong ? h('p', { class: 'wrong', lang: 'ja' }, x.wrong) : null, h('p', { class: 'right', lang: 'ja' }, x.expr)]
+      : [h('p', { class: 'right', lang: 'ja' }, x.expr, x.reading && x.reading !== x.expr ? h('span', { class: 'rd' }, ' (' + x.reading + ')') : null), x.meaning ? h('p', { class: 'mean' }, x.meaning) : null];
+    const del = S.confirmDel === x.id
+      ? h('button', { type: 'button', class: 'ghost danger', onClick: () => { S.confirmDel = null; Store.remove(x.id); } }, '정말 삭제')
+      : h('button', { type: 'button', class: 'ghost', onClick: () => { S.confirmDel = x.id; renderNotes(); setTimeout(() => { if (S.confirmDel === x.id) { S.confirmDel = null; renderNotes(); } }, 3000); } }, '삭제');
+    return h('article', { class: 'n-card' + (x.mastered ? ' mastered' : '') },
+      h('div', { class: 'n-top' }, h('span', { class: 'kind ' + x.kind }, x.kind === 'mistake' ? '틀린 표현' : '단어·표현'), x.hits > 1 ? h('span', { class: 'hits' }, '×' + x.hits) : null, x.mastered ? h('span', { class: 'done' }, '외움') : null),
+      h('div', { class: 'n-main' },
+        h('button', { type: 'button', class: 'play sm polite', 'data-play': key, 'aria-label': '재생', onClick: () => speak(x.expr, key) }, icon('ic-p', 'play'), icon('ic-s', 'stop')),
+        h('div', { class: 'n-text' }, main, x.note ? h('p', { class: 'nnote' }, x.note) : null)),
+      h('div', { class: 'n-acts' }, h('button', { type: 'button', class: 'ghost', onClick: () => Store.patch(x.id, { mastered: !x.mastered }) }, x.mastered ? '다시 복습' : '외웠어요'), del));
+  }
+  function renderNotes() {
+    const box = $('#notes');
+    const all = [...Store.items.values()].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    $('#badge').textContent = all.length ? String(all.length) : '';
+    if (S.review) { box.replaceChildren(reviewView()); refreshPlaying(); return; }
+    const todo = all.filter((x) => !x.mastered).length;
+    const F = [['all', '전체'], ['mistake', '틀린 표현'], ['word', '단어·표현'], ['done', '외움']];
+    const list = all.filter((x) => S.filter === 'all' || (S.filter === 'done' ? x.mastered : x.kind === S.filter));
+    box.replaceChildren(
+      h('div', { class: 'n-head' }, h('div', { class: 'n-count' }, h('strong', null, String(all.length)), '개 · 외운 것 ' + (all.length - todo) + '개'),
+        h('button', { type: 'button', class: 'cta sm', disabled: !todo, onClick: startReview }, '복습 카드')),
+      h('div', null, h('div', { class: 'seg', role: 'group', 'aria-label': '단어장 필터' }, F.map((f) => h('button', { type: 'button', 'aria-pressed': String(S.filter === f[0]), onClick: () => { S.filter = f[0]; renderNotes(); } }, f[1])))),
+      list.length ? list.map(noteCard) : h('div', { class: 'n-empty' }, all.length ? '이 분류에는 아직 없어요.' : '아직 비어 있어요. 대화에서 교정을 받거나 단어 칩을 누르면 여기에 모여요.'),
+      h('p', { class: 'nnote' }, '단어장은 이 브라우저에만 저장돼요. 사이트 데이터를 지우면 함께 사라져요.'));
+    refreshPlaying();
+  }
+
+  /* settings */
+  function renderSettings() {
+    const keyIn = h('input', { id: 'keyIn', type: 'password', autocomplete: 'off', autocapitalize: 'off', spellcheck: 'false', value: S.key, placeholder: 'AIza...' });
+    const modelIn = h('input', { id: 'modelIn', type: 'text', autocomplete: 'off', autocapitalize: 'off', spellcheck: 'false', value: S.model });
+    const msg = h('p', { class: 'small', role: 'status' });
+    const show = h('button', { type: 'button', class: 'ghost', onClick: () => { keyIn.type = keyIn.type === 'password' ? 'text' : 'password'; show.textContent = keyIn.type === 'password' ? '키 보기' : '키 숨기기'; } }, '키 보기');
+    const save = () => {
+      S.key = keyIn.value.trim(); S.model = modelIn.value.trim() || DEFAULT_MODEL;
+      const a = lsSet('ojd-key', S.key), b = lsSet('ojd-model', S.model);
+      msg.className = a && b ? 'ok' : 'small'; msg.textContent = a && b ? '저장했어요.' : '저장하지 못했어요. 브라우저 저장 공간을 확인해 주세요.';
+      S.err = null; renderFeed();
+    };
+    const test = async () => {
+      save(); if (!S.key) { msg.className = 'small'; msg.textContent = '키를 먼저 입력해 주세요.'; return; }
+      msg.className = 'small'; msg.textContent = '확인 중이에요...';
+      try { await post({ contents: [{ role: 'user', parts: [{ text: 'Reply with the single word OK.' }] }] }); msg.className = 'ok'; msg.textContent = '연결됐어요. 대화 탭에서 시작하세요.'; }
+      catch (e) { msg.className = 'small'; msg.textContent = errCopy(e); }
+    };
+    const clear = () => { S.key = ''; lsDel('ojd-key'); keyIn.value = ''; msg.className = 'small'; msg.textContent = '이 기기에서 키를 지웠어요.'; renderFeed(); };
+    $('#settings').replaceChildren(
+      h('div', { class: 'card' },
+        h('h3', null, 'Gemini API 키'),
+        h('p', { class: 'small' }, '키는 이 기기의 브라우저에만 저장되고, Google 서버로 직접 전송돼요. 이 파일이나 화면을 다른 사람에게 보여 주지 마세요. 키는 aistudio.google.com 에서 발급받아요.'),
+        h('div', { class: 'field' }, h('label', { for: 'keyIn' }, 'API 키'), keyIn),
+        h('div', { class: 'field' }, h('label', { for: 'modelIn' }, '모델 이름 (오류가 나면 AI Studio 문서에서 최신 이름을 확인해 바꿔 주세요)'), modelIn),
+        h('div', { class: 'row' }, h('button', { type: 'button', class: 'cta sm', onClick: save }, '저장'), h('button', { type: 'button', class: 'ghost', onClick: test }, '연결 테스트'), show, h('button', { type: 'button', class: 'ghost danger', onClick: clear }, '키 지우기')),
+        msg),
+      h('div', { class: 'card' },
+        h('h3', null, '음성 사용 안내'),
+        h('p', { class: 'small' }, '말하기(음성 입력)는 안드로이드 크롬에서 가장 잘 작동해요. 처음 마이크를 누르면 권한을 묻는데, 허용해 주세요.'),
+        h('p', { class: 'small' }, '듣기(음성 재생)에는 기기의 일본어 음성이 필요해요. 소리가 나지 않으면 기기 설정에서 Google 음성 서비스의 일본어 음성 데이터를 설치해 주세요.')));
+  }
+
+  /* tabs */
+  function setTab(t) {
+    S.tab = t;
+    $('#view-chat').hidden = t !== 'chat'; $('#view-notes').hidden = t !== 'notes'; $('#view-set').hidden = t !== 'set';
+    $('#tab-chat').setAttribute('aria-pressed', String(t === 'chat'));
+    $('#tab-notes').setAttribute('aria-pressed', String(t === 'notes'));
+    $('#tab-set').setAttribute('aria-pressed', String(t === 'set'));
+    if (t === 'notes') renderNotes();
+    if (t === 'set') renderSettings();
+  }
+  $('#tab-chat').addEventListener('click', () => setTab('chat'));
+  $('#tab-notes').addEventListener('click', () => setTab('notes'));
+  $('#tab-set').addEventListener('click', () => setTab('set'));
+  $('#composer').addEventListener('submit', (e) => { e.preventDefault(); send(); });
+  $('#msg').addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && e.keyCode !== 229) { e.preventDefault(); send(); } });
+  $('#mic').addEventListener('click', toggleMic);
+  $('#newTopic').addEventListener('click', () => (S.key ? newTopic() : setTab('set')));
+  $('#topicSel').addEventListener('change', (e) => { S.topic = e.target.value; lsSet('ojd-topic', S.topic); });
+
+  Store.load();
+  renderBar(); buildComposer(); renderFeed(); renderNotes(); setComposerState();
+})();
+</script>
+</body>
+</html>
